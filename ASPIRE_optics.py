@@ -28,7 +28,7 @@ systems.
 
 Usage:
     1) edit hardcoded mirror parameters in generate_parameter_dict()
-    2) run either main()
+    2) run main()
 
 
 
@@ -44,8 +44,11 @@ Usage:
 
 
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
+import copy
+import warnings as w
 
 def generate_parameter_dict():
     '''
@@ -56,49 +59,51 @@ def generate_parameter_dict():
     #physics parameters and unchangable telescope and horn parameters
     c = 299792458 #m/s, speed of light in a vacuum
     f1 = 8003.21 #mm, focal length of the primary, from Padin 2008
-    f2 = 818.2808 #mm, effective (thin lens equiv) focal length of the secondary, from Stark memo 2018.  f1 = 1310.0 mm, f2 = 2180.0 mm
-    d_12 = 8003.21 + 1310 # mm, distance between the primary and secondary, from Stark memo. Focal length + distance from prime focus to M2
-    dg = 2180 # mm, distance from secondary to gregorian focus.  From Stark memo.
+    f2 = 818.2808 #mm, effective (thin lens equiv) focal length of the secondary, from Stark memo 2018.  f1 = 1310.0 mm, f2 = 2180.0 mm, 
+    d_12 = 8003.21 + 1300 # mm, distance between the primary and secondary, from Stark memo. Focal length + distance from prime focus to M2
     a_h_B6 = 3.54 #mm, horn aperture radius, from Greer memo and confirmed by personal communication with John Effland
     a_h_B7 = 3.00225 # horn aperture radius, from ALMA Band 7 Cartridge Preliminary design report p.29
     R_h_B6 = 46.672 #mm, slant length of horn, from Greer memo, and calculated from a_h and NRAO FEND-40.02.06.01-001-P-DWG
     R_h_B7 = 45.7817 # slant length of horn, from ALMA Band 7 cartridge Preliminary design report, p.29
 
 
-    ######################################################################################
-    ############# user-provided system parameters  #######################################
+    ###########################################################################################
+    ####################  EDIT BELOW HERE #####################################################
+    ################## user-provided system parameters  #######################################
 
     #mirror parameters that are common between bands (but not common with SPT, so we can change them)
-    f_M3 = 103#115#111.25  # focal length of M3  #135 in Gene's design
-    f_M4 = 130#130# 133.75  # focal length of M4 #151 in Gene's
-    d_23 = dg+135 #160   # distance between M2 and M3
-    d_34 =  600 #570      # distance between M3 and M4 #600 in Gene's design
-    primary_truncate_dB = 11 #dB truncation of beam at primary (see Goldsmith Fig 6.6 for motivation to choose 11 dB)
+    f_M3 = 70 # focal length of M3  
+    f_M4 = 60.2   # focal length of M4 
+    d_23 = 2208.21+130 # distance between M2 and M3
+    d_34 =  220      # distance between M3 and M4 
+    primary_truncate_dB = 29.93665 #This is set by the position and size of the primary and secondary.  If we could chooose, we'd choose 11 dB (see Goldsmith Fig 6.6 for motivation to choose 11 dB)
 
 
     #mirror parameters that are not common between bands
-    lambda_b6 = [1.1, 1.32, 1.4] #[214.1e9, 227.1e9, 272.5e9]   # band 6 frequency, Hz,  1.4 mm, 1.32 mm, 1.1 mm
-    f_M5_b6 = 80 #72.6244        # thin lens equivalent focal length of M5, band 6 (cold mirror), mm
-    f_M6_b6 = 25
+    lambda_b6 = [1.1, 1.25, 1.4] # mm, wavelengths to plot for Band 6
+    f_M5_b6 = 170       # thin lens equivalent focal length of M5, band 6 (cold mirror), mm
+    f_M6_b6 = 53.731
+    d_45_b6 = 230+140          # distance between M4 and M5 for band 6, mm.  918.903 in gene's
+    d_56_b6 = 340        # distance between M5 and M6 for band 6, mm.
+    d_6h_b6 = 57.940           #distance between M6 and horn aperture for band 6, mm
 
-    d_45_b6 = 900 #995          # distance between M4 and M5 for band 6, mm.  918.903 in gene's
-    d_56_b6 = 62.122 #60        # distance between M5 and M6 for band 6, mm.
-    d_6h_b6 = 40                #distance between M6 and horn aperture for band 6, mm
-
-    lambda_b7 = [.8, .86, 1.1] #[272.5e9, 348.6e9, 374.7e9]    # band 7 frequency, Hz, 1.1 mm, .86 mm, .8 mm
-    f_M5_b7 = 34.5      # thin lens equivalent focal length of M5, band 7 (cold mirror), mm
-    f_M6_b7 = 25
-
-    d_45_b7 = 900      # distance between M4 and M5 for band 7, mm
-    d_56_b7 = 80       # distance between M5 and M6 for band 5, mm
-    d_6h_b7 = 40       # distance between M6 and horn aperture for band 7, mm
+    lambda_b7 = [.8, .95, 1.1] # mm, band 7 wavelengths to plot
+    f_M5_b7 = 65.990      # mm, thin lens equivalent focal length of M5, band 7 (cold mirror)
+    d_45_b7 = 230+260      # mm, distance between M4 and M5 for band 7
+    d_5h_b7 = 80       # mm, distance between M5 and horn aperture for band 7
     
-    mirror_max_radii_b6 = [5000, 875, 178, 127, 80, 80]
-    mirror_max_radii_b7 = [5000, 875, 178, 127, 80, 80]
-
     
+    # Mirror radius, window spacing, and dichroic spacing parameters below only impact the plotting, not any of the calculations
+    #                       M1 ,  M2, M3,  M4,  M5,  M6 
+    mirror_max_radii_b6 = [5000, 875, 65,  33,  34,  29] #mm, radius
+    mirror_max_radii_b7 = [5000, 875, 65,  33,  38] #mm, radius
+    dichroic spacing = 230 #mm, distance from M4 to the dirchoic
+    window_spacing_b6 = 230 + 140 + 128 # mm, distance from M4 to the 300 K window
+    window_spacing_b7 = 230 + 38        # mm, distance from M4 to the 300K window
+
     
     ######################################################################################
+    ############################# EDIT ABOVE HERE ########################################
     ######################################################################################
     
     
@@ -107,20 +112,23 @@ def generate_parameter_dict():
     ############ put all the parameters into a dict  #################
     beams = {'B6':{}, 'B7':{}}
 
-    beams['B6']['focal_lengths'] = [f1, f2, f_M3, f_M4, f_M5_b6, f_M6_b6]
+    beams['B6']['focal_lengths'] = [f1, f2, f_M3, f_M4, f_M5_b6, f_M6_b6]   
     beams['B6']['mirror_max_radii'] = mirror_max_radii_b6
-    beams['B6']['element_spacings'] = [d_12, d_23, d_34, d_45_b6, d_56_b6, d_6h_b6]  
-
-    beams['B7']['focal_lengths'] = [f1, f2, f_M3, f_M4, f_M5_b7, f_M6_b7]  
+    beams['B6']['element_spacings'] = [d_12, d_23, d_34, d_45_b6, d_56_b6, d_6h_b6]
+    beams['B6']['dichroic_spacing'] = dichroic_spacing
+    beams['B6']['window_spacing'] = window_spacing_b6
+    
+    beams['B7']['focal_lengths'] = [f1, f2, f_M3, f_M4, f_M5_b7, f_M6_b7]
     beams['B7']['mirror_max_radii'] = mirror_max_radii_b7
-    beams['B7']['element_spacings'] = [d_12, d_23, d_34, d_45_b7, d_56_b7, d_6h_b7]   
+    beams['B7']['element_spacings'] = [d_12, d_23, d_34, d_45_b7, d_56_b7, d_6h_b7]
+    beams['B7']['dichroic_spacing'] = beams['B6']['dichroic_spacing']
+    beams['B7']['window_spacing'] = window_spacing_b7
 
 
-    # calculated system parameters  #
-
+    ####### calculated system parameters  #########
+    
     # band 6
     beams['B6']['lambda'] = lambda_b6
-    beams['B6']['greg_foc'] = dg
     beams['B6']['primary_truncate_dB'] = primary_truncate_dB
     beams['B6']['frequency'] = [ 1000*c/x for x in beams['B6']['lambda'] ]    #frequency in Hz
     beams['B6']['a_h'] = a_h_B6  # horn aperture radius
@@ -129,7 +137,6 @@ def generate_parameter_dict():
     
     # band 7
     beams['B7']['lambda'] = lambda_b7
-    beams['B7']['greg_foc'] = dg
     beams['B7']['primary_truncate_dB'] = primary_truncate_dB
     beams['B7']['frequency'] = [ 1000*c/x for x in beams['B7']['lambda'] ] #frequency in Hz
     beams['B7']['a_h'] = a_h_B7  # horn aperture radius
@@ -139,36 +146,87 @@ def generate_parameter_dict():
     return beams
     
     
-def main(direction = 'forward', plot = True):
+def main(directions = ['forward'], plot = True, do_adjust = True):
     '''
+    
+    
+    Parameters:
+    -----------
+    directions: list of strings, allowed values of list elements are 'forward' and
+        'reverse'.  List may be a single element.  Forward means starting from the
+        sky and going towards the horn.  Reverse means starting from the horn and 
+        going towards the sky.
+    plot: bool, whether or not to make the plots
+    do_adjust: bool, if True the code will calculate what the last mirror focal 
+        length and distance from last mirror to the horn need to be to achieve 
+        perfect matching.  Those calculated values will be used for plotting. 
+        If False, the code will use the user-provided focal length and element 
+        spacing, even if they are not optimal. Only has an effect when looking 
+        at the 'forward' direction.
+    
+    
+    Returns:
+    --------
+    beams: dict, a dictionary containing all of the beam info
  
     '''
-
+    
     beams = generate_parameter_dict()
     
-    for band in beams:
-        beams[band] = beam_propagation(beams[band], direction)
-        
+    for direction in directions:
+        print('\n Beginning {}\n'.format(direction))
     
-    if plot:
-        thin_lens_plot(beams, direction)
+        for band in beams:
+            print('\n Beginning {}\n'.format(band))
+            beams[band] = beam_propagation(beams[band], direction, do_adjust=do_adjust)
+              
+        if plot:
+            print(matplotlib.get_backend())
+            thin_lens_plot(beams, direction)
     
     
     return beams
     
 
 
-def beam_propagation(beam, direction = 'forward', point_density_index = 10):
+def beam_propagation(beam, direction = 'forward', point_density_index = 50, do_adjust = True):
     '''
+    Propagates a gaussian beam through space.  Calculates beam radius along the path of the 
+    beam, locations of beam waists, etc.
+    
+    
+    Parameters:
+    ----------
+    beam: dict, one band (ie band 6 or band 7) at a time, dict producted by generate_parameter_dict()
+    direction: string, either "forward" or "reverse".  Forward means starting from 
+        the primary and going towards the receiver.  Reverse means starting at the horn antenna in 
+        the receiver and going towards the primary/sky.
+    point_density_index: int or float, how many points along the optical axis should we calculate 
+        beam radii for?  This number is a multiplicative factor in the calculation of how many points
+        to use.
+    do_adjust: bool, whether stick with the user-set numbers for the last mirror 
+        position and focal length (False) or to adjust them so the matching to 
+        the horn is perfect for the middle wavelength (True).  Only has an effect 
+        when working in the 'forward' direction
+        
+        
+    Returns:
+    --------
+    beam: dict, the same dict that was provided as an input parameter but now 
+        with additional keys added that capture info about the beam width along the z-axis, 
+        locations and sizes of beam waists, etc
+      
     
     '''
+    
+    print('do adjust: {}'.format(do_adjust))
 
-    focal_lengths = beam['focal_lengths']
-    element_spacings = beam['element_spacings']
+    focal_lengths = beam['focal_lengths'].copy()
+    element_spacings = beam['element_spacings'].copy()
     lambdas = beam['lambda']
     R_h = beam['R_h']
     w_h = beam['w_h']
-    primary_truncate_dB = beam['primary_truncate_dB']
+    primary_truncate_dB = beam['primary_truncate_dB']  #TODO: actually, this will be set by the secondary size.  Calculate it.
     
     n_mirrors = len(focal_lengths) -1 # -1 because we stop/start at the prime focus rather than the primary
     
@@ -183,26 +241,25 @@ def beam_propagation(beam, direction = 'forward', point_density_index = 10):
         if direction == 'forward': #starting waist is prime focus
             w_primary = 5000/(0.3393 * (primary_truncate_dB**.5))  #goldsmith 2.35b, beamwidth at primary
             w0_primary = min(w0_calc(lambd, w_primary, focal_lengths[0])) #primary beam waist radius      
-            w0 = [w0_primary]
+            w0 = [w0_primary]  #start the list of beam waists
             z_w0 = [-(element_spacings[0]-focal_lengths[0])]  #z = 0 at secondary.  To make z = 0 at primary, set to focal_lengths[0]           
         if direction == 'reverse': #starting waist is horn waist
             w0_horn, z_offset_horn = w0z0(lambd, R_h, w_h) #z_offset is the distance inside the horn (measured from the aperture) where the beam waist falls
-            if 'horn_offset' in beam: #we have already started the horn offset list for the different frequencies
+            if 'horn_offset' in beam: #if we have already started the horn offset list for the different frequencies
                 beam['horn_offset'].append(z_offset_horn)
             else: 
                 beam['horn_offset'] = [z_offset_horn]
             w0 = [w0_horn]
             z_w0 = [-z_offset_horn]
 
-        
-        
+              
         #calculate mirror positions
         for m in range(n_mirrors):
             if m == 0: #first one
                 if direction == 'forward':
-                    mirror_z = [0]  #forward:  z = 0 at secondary  #could make this 0 at primary instead but would need to edit z_w0 above too
+                    mirror_z = [0]  #forward:  z = 0 at secondary
                 elif direction == 'reverse':
-                    mirror_z = [elelemt_spacings[m] + z_w0[0]]  #reverse: z = 0 at horn aperture
+                    mirror_z = [element_spacings[0]]  #reverse: z = 0 at horn aperture
                 else:
                     raise ValueError('direction argument must be forward or reverse')
             else:
@@ -231,7 +288,78 @@ def beam_propagation(beam, direction = 'forward', point_density_index = 10):
             previous_w0 = w0[-1]
             previous_z_w0 = z_w0[-1]
             
+            
+        if direction == 'forward' and y == 1 and do_adjust == True: #try to make the last mirror before the horn have the correct focal length to match the horn at the middle frequency
+            
+            adjust = True
+            #figure out what the mirror f should be and what the distence between the last mirror and the horn should be
+            w0_in = w0[-2]
+            w0_horn, z_offset_horn = w0z0(lambd, R_h, w_h) #z_offset is the distance inside the horn (measured from the aperture) where the beam waist falls
+            d_in = mirror_z[-1] - z_w0[-2]
+            print('d_in, w0_in, w0_horn', d_in, w0_in, w0_horn)
+            tmp1, tmp2, f_pos_w, f_neg_w = reverse_lens(w0_in, d_in, 100, w0_horn, lambd)          
+
+            if np.isreal(f_pos_w) and np.isreal(f_pos_w):  #both are real
+                if f_pos_w > 0 and f_neg_w > 0: #both positive.  Warn and take smaller one.
+                    w.warn('Two positive roots for last mirror focal length: {}, {}.  Taking smaller one.'.format(f_pos_w, f_neg_w))
+                    focal_length = min([f_pos_w, f_neg_w])
+                elif f_pos_w > 0: #this is the usable root
+                    focal_length = f_pos_w
+                elif f_neg_w > 0: #this is the usable root
+                    focal_length = f_neg_w
+                else: #no positive roots
+                    w.warn('no positive roots for last mirror focal length to match horn')
+                    adjust = False
+            elif np.isreal(f_pos_w) and f_pos_w > 0: #one real root and it's positive
+                focal_length = f_pos_w
+            elif np.isreal(f_neg_w) and f_neg_w > 0: #one real root and it's positive
+                focal_length = f_neg_w
+            else:  #no real positive roots
+                w.warn('no real positive roots for last mirror focal length to match horn')
+                adjust = False
+                
+            if adjust:  #we found a real positive solution for the focal length.  Now apply it
+            
+                #fix the current wavelength                
+                w0_out, d_out = lens(w0_in, d_in, focal_length, lambd)
+                print('w0_out, w0_horn: {}, {}'.format(w0_out, w0_horn))
+                new_element_spacing = d_out - z_offset_horn
+                print('adjusting last mirror focal length to match horn. f = {}mm'.format(focal_length))
+                print('adjusting space from last mirror to horn aperture: d = {}mm'.format(new_element_spacing))
+                w0[-1] = w0_out
+                z_w0[-1] = mirror_z[-1] + d_out
+                element_spacings[-1] = new_element_spacing
+                focal_lengths[-1] = focal_length
+                
+                #fix the previous lambda
+                w0_in = w0_matrix[0][-2]
+                d_in = mirror_z[-1] - z_w0_matrix[0][-2]
+                w0_out, d_out = lens(w0_in, d_in, focal_length, lambdas[0])
+                w0_matrix[0][-1] = w0_out
+                z_w0_matrix[0][-1] = mirror_z[-1] + d_out
+                
+                #store
+                beam['element_spacings'] = element_spacings
+                beam['focal_lengths'] = focal_lengths
+                
+                
+                
+        #store new calculated lists into the per-frequency matrices      
+        if y == 0: #we haven't made the per-frequency matrices yet
+            w0_matrix = [w0]
+            z_w0_matrix = [z_w0]
+        else:
+            w0_matrix.append(w0)
+            z_w0_matrix.append(z_w0)
+
+         
+    #now fill in all the points of the beam envelope all along the z-axis        
+    for y in range(len(lambdas)):  #cycle through the frequencies for this band
+        lambd = lambdas[y]
         
+        w0 = w0_matrix[y]
+        z_w0 = z_w0_matrix[y]
+                
         #generate points along z-axis
         z_list = []
         for z in range(len(z_w0)-1):
@@ -242,39 +370,73 @@ def beam_propagation(beam, direction = 'forward', point_density_index = 10):
                 z_list.extend(z_steps)
             else: 
                 z_list.extend(z_steps[1:]) #the first point is already there from the previous round
-                
-                
+                               
         #for every point in z_list, calculate the beam radius (w), radius of wavefront curvature (R), phase slippage (phi)
         w = []
         R = []
         phi = []
         waist_counter = 0
-        for z in z_list:
-            if waist_counter > 0 and z > mirror_z[waist_counter-1]: #we have reached a mirror, move to the next waist
-                waist_counter += 1
-            z_offset = z-z_w0[waist_counter]
-            w_tmp, R_tmp = wR(lambd, z_offset, w0[waist_counter])
-            phi_tmp = phi_slippage(lambd, z_offset, w0[waist_counter])
-            w.append(w_tmp)
-            R.append(R_tmp)
-            phi.append(phi_tmp)
-        
-      
+        if direction == 'forward':
+            current_mirror_z = mirror_z[0]
+            for z in z_list:
+                if z > current_mirror_z and waist_counter<len(w0)-1: #we have reached a mirror, move to the next waist
+                    waist_counter += 1
+                    if waist_counter< len(mirror_z):
+                        current_mirror_z = mirror_z[waist_counter]
+                z_offset = z-z_w0[waist_counter]
+                w_tmp, R_tmp = wR(lambd, z_offset, w0[waist_counter])
+                phi_tmp = phi_slippage(lambd, z_offset, w0[waist_counter])
+                w.append(w_tmp)
+                R.append(R_tmp)
+                phi.append(phi_tmp)
+        elif direction == 'reverse':
+            current_mirror_z = mirror_z[0]
+            for z in z_list:
+                if z > current_mirror_z and waist_counter<len(w0)-1: #we have reached a mirror, move to the next waist
+                    waist_counter += 1
+                    if waist_counter < len(mirror_z):
+                        current_mirror_z = mirror_z[waist_counter]
+                z_offset = z-z_w0[waist_counter]
+                w_tmp, R_tmp = wR(lambd, z_offset, w0[waist_counter])
+                phi_tmp = phi_slippage(lambd, z_offset, w0[waist_counter])
+                w.append(w_tmp)
+                R.append(R_tmp)
+                phi.append(phi_tmp)
+                      
         #store new calculated lists into the per-frequency matrices      
         if y == 0: #we haven't made the per-frequency matrices yet
-            w0_matrix = [w0]
-            z_w0_matrix = [z_w0]
             w_matrix = [w]
             R_matrix = [R]
             z_list_matrix = [z_list]
             phi_matrix = [phi]
         else:
-            w0_matrix.append(w0)
-            z_w0_matrix.append(z_w0)
             w_matrix.append(w)
             R_matrix.append(R)
             z_list_matrix.append(z_list)
             phi_matrix.append(phi)
+            
+    
+    #calculate the waist offsets at the horn
+    z_w0_horn_beam_offsets = []
+    w0_horn_beam_offsets = []
+    for i in range(len(lambdas)):
+        lambd = lambdas[i]
+        w0_beam = w0_matrix[i][-1]
+        z_w0_beam = z_w0_matrix[i][-1]
+        
+        R_h = beam['R_h']
+        w_h = beam['w_h']
+        horn_aperture_position = mirror_z[-1] + beam['element_spacings'][-1]
+        w0_horn, z_offset_horn = w0z0(lambd, R_h, w_h) #z_offset is the distance inside the horn from the aperture where w0 falls
+        z_w0_horn = z_offset_horn + horn_aperture_position
+        
+        w0_diff = w0_horn - w0_beam
+        z_w0_diff = z_w0_horn - z_w0_beam
+        w0_horn_beam_offsets.append(w0_diff)
+        z_w0_horn_beam_offsets.append(z_w0_diff)
+        
+    print('Horn-beam wiast offsets: {}'.format(np.round(w0_horn_beam_offsets,3)))
+    print('Horn-beam z_w0  offsets: {}'.format(np.round(z_w0_horn_beam_offsets,3)))
     
     #store everything in the beam dictionary
     beam['w0'] = w0_matrix
@@ -284,15 +446,21 @@ def beam_propagation(beam, direction = 'forward', point_density_index = 10):
     beam['mirror_z'] = mirror_z
     beam['z_list'] = z_list_matrix
     beam['phi'] = phi_matrix
+    beam['horn_beam_w0_offsets'] = w0_horn_beam_offsets
+    beam['horn_beam_z_offsets'] = z_w0_horn_beam_offsets    
         
     return beam
     
    
     
-def thin_lens_plot(beams, direction = 'forward'):
+def thin_lens_plot(beams, direction = 'forward', phase = True, single_band = False):
     '''
     
-    
+    Parameters:
+    ----------
+    single_band: bool or string, False or which single band you want to plot (e.g. 'B6').
+        Set to False if you want both bands plotted.  Set to 'B6' or 'B7' if you want
+        plots for just that one band. 
     '''
     
     
@@ -300,31 +468,76 @@ def thin_lens_plot(beams, direction = 'forward'):
     color_list = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9']
     
     for band in beams:
-        beam = beams[band]
+        if single_band:
+            if single_band == band:
+                beam = beams[band]
+            else:
+                continue
+        else:
+            beam = beams[band]
+        R_h = beam['R_h']
+        w_h = beam['w_h']
         plt.figure()
-        for row in range(len(beam['lambda'])):
-            label = str(np.round(beam['lambda'][row], 2))
+        for row in range(len(beam['lambda'])): #each frequency within B6 or B7 to look at
+            label = str(np.round(beam['lambda'][row], 2)) + ' mm'
+            lambd = beam['lambda'][row]
             plt.plot(beam['z_list'][row], beam['w'][row], '.', linewidth = 2, label = label, color = color_list[row])
             
+            #horn waist position
+            if direction == 'forward':
+                horn_aperture_position = beam['mirror_z'][-1] + beam['element_spacings'][-1]
+                w0_horn, z_offset_horn = w0z0(lambd, R_h, w_h) #z_offset is the distance inside the horn from the aperture where w0 falls
+                plt.plot(horn_aperture_position + z_offset_horn, w0_horn, '*', color = color_list[row])
+                
             
-            print(beam['mirror_z'])
-            #vertical lines and labels for mirrors
-            for x in range(len(beam['mirror_z'])):
-                plt.vlines(beam['mirror_z'][x], ymin = 0, ymax = beam['mirror_max_radii'][x]/2.5, color = 'black') #5w
-                plt.hlines(beam['mirror_max_radii'][x]/2, xmin = beam['mirror_z'][x]-10, xmax = beam['mirror_z'][x]+10, color = 'black') #4w
-                if direction == 'forward':
-                    plt.text(beam['mirror_z'][x]-20, -10, 'M{}'.format(x+2))
-                elif direction == 'reverse':
-                    plt.text(beam['mirror_z'][x]-20, -10, 'M{}'.format(len(beam['mirror_z']-x)))
+            if phase:
+                plt.plot(beam['z_list'][row], np.asarray(beam['phi'][row])*100, ':', linewidth = 1, color = color_list[row], alpha = 0.5)
+            
+            
+            mirror_max_radii = beam['mirror_max_radii'].copy() #.copy avoids python mutability nonsense
+            if direction == 'reverse':
+                mirror_max_radii.reverse()
+            #print(mirror_max_radii)
+            #print(beam['mirror_z'])
+            
+            #vertical lines and labels for mirrors, dichroic, and windows
+            if direction == 'forward':
+                for x in range(len(beam['mirror_z'])):
+                    plt.vlines(beam['mirror_z'][x], ymin = 0, ymax = mirror_max_radii[x+1]/2.5, color = 'black') #5w
+                    plt.hlines(mirror_max_radii[x+1]/2, xmin = beam['mirror_z'][x]-10, xmax = beam['mirror_z'][x]+10, color = 'black') #4w
+                    plt.text(beam['mirror_z'][x]-20, -5, 'M{}'.format(x+2))
+                dichroic_z = beam['mirror_z'][2] + beam['dichroic_spacing']
+                plt.text(dichroic_z-20, -5, 'D')
+                window_z = beam['mirror_z'][2] + beam['window_spacing']
+                plt.text(window_z-1, -5, 'W')
+                plt.vlines(dichroic_z, ymin = 0, ymax = 100/5, color = 'blue')
+                plt.vlines(window_z, ymin = 0, ymax = 50/5, color = 'cyan')
+                plt.vlines(window_z+30, ymin = 0, ymax = 50/5, color = 'cyan')
+            elif direction == 'reverse':
+                for x in range(len(beam['mirror_z'])):
+                    plt.vlines(beam['mirror_z'][x], ymin = 0, ymax = mirror_max_radii[x]/2.5, color = 'black') #5w
+                    plt.hlines(mirror_max_radii[x]/2, xmin = beam['mirror_z'][x]-10, xmax = beam['mirror_z'][x]+10, color = 'black') #4w
+                    plt.text(beam['mirror_z'][x]-20, -10, 'M{}'.format(len(beam['mirror_z'])-x+1))
                  
             # vertical lines for beam waists
+            first_waist = 1
             for y in range(len(beam['w0'][row])):
-                plt.vlines(beam['z_w0'][row][y], ymin = 0, ymax = 10, color = color_list[row], alpha = 0.1, label = label + ' waist')
-        
+                if first_waist == 1:
+                    plt.vlines(beam['z_w0'][row][y], ymin = 0, ymax = 10, color = color_list[row], alpha = 0.3, label = label + ' waist')
+                    first_waist = 0
+                else:
+                    plt.vlines(beam['z_w0'][row][y], ymin = 0, ymax = 10, color = color_list[row], alpha = 0.3)
+       
+       
         plt.grid()
-        plt.title(band)
-        plt.legend()
-        plt.tight_layout()
+        #plt.xlim([1800,3600])
+        #plt.ylim([-17,70])
+        plt.xlabel('distance along optical axis [mm, secondary at 0]', fontsize = 14)
+        plt.ylabel('1/e beam radius [mm]', fontsize=14)
+        plt.title('{} {}'.format(band, direction), fontsize=14)
+        plt.legend(loc='upper right')
+        #plt.tight_layout()
+        plt.pause(0.001) #event pump to keep plt from freezing
                 
         
 
@@ -373,15 +586,19 @@ def wR(lambd, z, w_0):
     R: int or float, the radius of curvature of the wavefront at location z
     
     '''
-    w = w_0*np.sqrt(1+(lambd*z/(3.14159*w_0**2))**2)    #goldsmith eq 2.21b and 2.26c
-    try:
-        R = z*(1+(3.14159*w_0**2/(lambd*z))**2)             #goldsmith eq 2.21a and 2.26b
-    except:
-        print('exception1')
-        if z == 0:
-            R = float('nan')
-        else:
-            raise
+    w = float(w_0*np.sqrt(1+(lambd*z/(3.14159*w_0**2))**2))    #goldsmith eq 2.21b and 2.26c
+    if z == 0:
+        R = float('nan')
+    else:
+    
+        try:
+            R = z*(1+(3.14159*w_0**2/(lambd*z))**2)             #goldsmith eq 2.21a and 2.26b
+        except:
+            print('exception1')
+            if z == 0:
+                R = float('nan')
+            else:
+                raise
     
     return w, R
     
@@ -413,8 +630,7 @@ def phi_slippage(lambd, z, w0):
 def w0_calc(lambd, w, z):
     '''
     Calculate the beam waist radius, w0, given the beam radius at a given distance, z, 
-    away from the beam waist.  Not currently (5/25) called elsewhere in the code, but
-    useful for "by hand" calculations.
+    away from the beam waist.  
     
     Parameters:
     ----------
@@ -423,9 +639,9 @@ def w0_calc(lambd, w, z):
     z: float, distance from the beam waist to where w is measured, typically in mm
     
     '''
-    
-    w0_pos = ((w**2/2) * (1 + ((1 - ((2*lambd*z/(3.1415*w**2))**2))**.5)))**.5
-    w0_neg = ((w**2/2) * (1 - ((1 - ((2*lambd*z/(3.1415*w**2))**2))**.5)))**.5
+    #from Goldsmith table 2.3 line 3
+    w0_pos = (((w**2)/2) * (1 + ((1 - ((2*lambd*z/(3.1415*(w**2)))**2))**.5)))**.5
+    w0_neg = (((w**2)/2) * (1 - ((1 - ((2*lambd*z/(3.1415*(w**2)))**2))**.5)))**.5
     
     return w0_pos, w0_neg
 
@@ -470,6 +686,37 @@ def lens(w0_in, d_in, f, lambd):
     
 
 def reverse_lens(w0_in, d_in, d_out, w0_out, lambd):
+    '''
+    Solve for the needed focal length given the desired d_out and d_in.
+    OR
+    Solve for the needed focal length given the desired w0_in and w0_out.
+    
+    Uses Goldsmith equations 3.31a and 3.31b, solved for f
+    
+    Parameters:
+    -----------
+    w0_in: float, desired input beam waist
+    w0_out: float, desired output beam wasit
+    d_in: float, desired input distance from waist to lens
+    d_out: float, desired output distance from lens to waist
+    lambd: float, the wavelength in mm
+    
+    
+    Returns:
+    --------
+    f_pos_d: float, needed focal length using the requested d_in and d_out (but 
+        not the requested waists). Positive root.  
+    f_neg_d: float, needed focal length using the requested d_in and d_out (but 
+        not the requested waists). Negative root.  
+    f_pos_w: float, needed focal length using the requested w0_in and w0_out (but 
+        not the requested distances). Positive root.  
+    f_neg_w: float, needed focal length using the requested w0_in and w0_out (but 
+        not the requested distances). Negative root.
+    
+    
+    
+    '''
+    
 
     zc = 3.14159*(w0_in**2)/lambd
     
@@ -484,7 +731,7 @@ def reverse_lens(w0_in, d_in, d_out, w0_out, lambd):
     
     
     #using the w0_out equation.  Given w0_in, w0_out, d_in.  d_out, and f free.  
-    A = -1 - ((w0_in/w0_out)**2)
+    A = 1 - ((w0_in/w0_out)**2)
     B = -2*d_in
     C = (zc**2) + (d_in**2)
     
@@ -493,7 +740,7 @@ def reverse_lens(w0_in, d_in, d_out, w0_out, lambd):
     
     [w0_out_neg, d_out] = lens(w0_in, d_in, f_neg_w, lambd)
     [w0_out_pos, d_out] = lens(w0_in, d_in, f_pos_w, lambd)
-    print('M5 to horn waist dist for waist matching: {}, {}'.format(np.round(w0_out_pos, 2), np.round(w0_out_neg, 2)))
+    #print('M5 to horn waist dist for waist matching: {}, {}'.format(np.round(w0_out_pos, 2), np.round(w0_out_neg, 2)))
        
     return f_pos_d, f_neg_d, f_pos_w, f_neg_w
     
@@ -509,6 +756,11 @@ def lens_explorer(w0_in, d_in, f_list, lambd):
         w0_out_tmp, d_out_tmp = lens(w0_in, d_in, f, lambd)
         d_out.append(d_out_tmp)
         w0_out.append(w0_out_tmp*10)
+        
+    ind_max_dout = np.argmax(d_out)
+    f_max_dout = f_list[ind_max_dout] #what focal length gives the largest d_out
+    print('Focal length for largest d_out: {} mm'.format(np.round(f_max_dout,4)))
+    print('d_out at that focal length:     {} mm'.format(np.round(d_out[ind_max_dout],4)))
     
     plt.figure()
     plt.plot(f_list, d_out, label = 'd_out')
@@ -519,6 +771,7 @@ def lens_explorer(w0_in, d_in, f_list, lambd):
     plt.legend()
     plt.ylabel('w0_out*10 or d_out [mm]')
     plt.tight_layout()
+    plt.pause(0.001) #event pump to keep plt from freezing
         
 def M5_focal_vs_mirror_size(lambd, w0_in, d_out):
     '''
@@ -554,6 +807,7 @@ def M5_focal_vs_mirror_size(lambd, w0_in, d_out):
     plt.xlabel('d_in [mm]')
     plt.ylabel('focal length of M5 [mm]')
     plt.title('Requirement for d_out of {}'.format(d_out))
+    plt.pause(0.001) #event pump to keep plt from freezing
     
     
     indices = np.where(~np.isnan(neg))
@@ -570,419 +824,84 @@ def M5_focal_vs_mirror_size(lambd, w0_in, d_out):
 
     #return(diameter, neg)
     
-             
-    
-    
-
-    
-    
-    
-
-    
-    
-
-
-    
-    
-    
-    
-    
-def thin_lens_plot_reverse(beams, plot_phi = False):
+def horn_coupling_calculator(beam):
     '''
-    
-    
+    Assumes the two beams are perfectly co-axial, and the only mismatch is coming
+    from the beam waist (i.e. the beam coming in from the sky) being a slightly different 
+    size and position than the horn waist (i.e. the beam coming from the horn antenna).  
+    Assumes a well-behaved corrugated conical horn antenna in the style of Goldsmith 
+    table 7.1 and section 7.6.2. 
     
     '''
+    eff = []
+    lambdas = beam['lambda']
+    R_h = beam['R_h']
+    w_h = beam['w_h']
     
-    plt.ion()
-    plt.figure()
-    
-    plt.plot(np.array(beams['B6']['z_list']) - beams['B6']['z_elements'][-2], beams['B6']['w'], '-r', linewidth = 2, label = 'B6 beam width')
-    plt.plot(np.array(beams['B7']['z_list']) - beams['B7']['z_elements'][-2], beams['B7']['w'], '-b', linewidth = 2, label = 'B7 beam width')
-    
-    plt.text(-2424, 65, "M3", fontsize = 14, color = 'black')
-    plt.text(-3050, 35, "M4", fontsize = 14, color = 'black')
-    
-    plt.vlines(beams['B6']['z_w0'][2] - beams['B6']['z_elements'][-2], ymin = 0, ymax = 10, color = 'magenta', label = 'B6 waist')
-    plt.vlines(beams['B7']['z_w0'][2] - beams['B7']['z_elements'][-2], ymin = 0, ymax = 10, color = 'cyan', label = 'B7 waist')
-    
-    #beam waists
-    plt.vlines(beams['B6']['z_w0'][3] - beams['B6']['z_elements'][-2], ymin = 0, ymax = 10, color = 'magenta')
-    plt.vlines(beams['B7']['z_w0'][3] - beams['B7']['z_elements'][-2], ymin = 0, ymax = 10, color = 'cyan')
-    
-    #mirrors
-    plt.vlines(8310, ymin = 0, ymax = 5000, color = 'black') #primary
-    plt.hlines(4443, xmin = 8210, xmax = 8410, color='black') # primary 11dB
-    plt.vlines(0, ymin=0, ymax = 875, color = 'black') #secondary
-    plt.hlines(437.5, xmin = -100, xmax = +100, color='black')
-    plt.vlines(beams['B6']['z_elements'][-3] - beams['B6']['z_elements'][-2], ymin = 0, ymax = 35.5, color = 'black') # tertiary
-    plt.vlines(beams['B6']['z_elements'][-4] - beams['B6']['z_elements'][-2], ymin = 0, ymax = 20.3, color = 'black') # quaternary
-    plt.vlines(beams['B6']['z_elements'][-5] - beams['B6']['z_elements'][-2], ymin = 0, ymax = 7.62, color = 'black') # quinary
-    
-    
-    plt.grid()
-    plt.xlabel('distance from secondary [mm]')
-    plt.ylabel('beam radius [mm]')
-    plt.xlim([-4200,-1800])
-    plt.ylim([-10, 150])
-    plt.legend()
-    
-    if plot_phi:
-        plt.figure()
-        plt.plot(np.array(beams['B6']['z_list']) - beams['B6']['z_elements'][-2], beams['B6']['phi'], '-r', linewidth = 2, label = 'B6 phi')
-        plt.plot(np.array(beams['B7']['z_list']) - beams['B7']['z_elements'][-2], beams['B7']['phi'], '-b', linewidth = 2, label = 'B7 phi')
+    for i in range(len(lambdas)):
+        lambd = lambdas[i]
+        beam_waist = beam['w0'][i][-1]
+        beam_waist_position = beam['z_w0'][i][-1]
+        horn_aperture_position = beam['mirror_z'][-1] + beam['element_spacings'][-1]
+        w0_horn, z_offset_horn = w0z0(lambd, R_h, w_h) #z_offset is the distance inside the horn from the aperture where w0 falls
+        horn_waist_position = horn_aperture_position + z_offset_horn
+        waist_spacing = abs(horn_waist_position - beam_waist_position)
         
-        plt.text(-2424, 0, "M3", fontsize = 14, color = 'black')
-        plt.text(-3000, 0, "M4", fontsize = 14, color = 'black')
+        #calculate horn beam width and radius of curvature at location of beam waist.  
+        w_horn, R_horn = wR(lambd, waist_spacing, w0_horn)
         
+        coupling_efficiency = 4/((((beam_waist/w_horn) + (w_horn/beam_waist))**2) + (((3.14159*beam_waist*w_horn)/(lambd*R_horn))**2))
+        eff.append(coupling_efficiency)
         
-        plt.xlabel('distance from secondary [mm]')
-        plt.ylabel('phi [radians]')
-        plt.legend()
-    
+    return eff
 
-def thin_lens_plot_forward(beams):
+def tilt_coupling_calculator(theta_degrees, w0, lambd):
     '''
-
-
-    '''
-
-    plt.ion()
-    plt.figure()
+    Coupling efficiency of tilted beams.  Assumes the beams are perfectly matched 
+    (same waist size and location) except that one beam is tilted by a small angle
+    theta.  Assumes the meeting point of the beams is right at the waist.
     
-  
-    #plot beamwidths    
-    plt.plot(beams['B6']['z_list'], beams['B6']['w'], '-r', linewidth = 2, label = 'B6 beamwidth')
-    plt.plot(beams['B7']['z_list'], beams['B7']['w'], '-b', linewidth = 2, label = 'B7 beamwidth')
+    w0 and lambd arguments must be in the same units (usually mm)
     
-    #beam waists
-    plt.vlines(beams['B6']['z_w0'][2], ymin = 0, ymax = 10, color = 'magenta', label = 'B6 waist')
-    plt.vlines(beams['B6']['z_w0'][3], ymin = 0, ymax = 10, color = 'magenta')
-    plt.vlines(beams['B7']['z_w0'][2], ymin = 0, ymax = 10, color = 'cyan', label = 'B7 waist')
-    plt.vlines(beams['B7']['z_w0'][3], ymin = 0, ymax = 10, color = 'cyan')
-    
-    #mirrors
-    plt.vlines(0, ymin = 0, ymax = 5000, color = 'black') #primary
-    plt.hlines(4443, xmin = -20, xmax = 20, color='black') #primary 11dB
-    plt.vlines(beams['B6']['z_elements'][1], ymin=0, ymax = 875, color = 'black') #secondary
-    plt.vlines(beams['B6']['z_elements'][2], ymin = 0, ymax = 35.5, color = 'black') #tertiary 5w
-    plt.hlines(44.375, xmin = beams['B6']['z_elements'][2]-10, xmax = beams['B6']['z_elements'][2]+10, color='black') #tert 4w
-    plt.vlines(beams['B6']['z_elements'][3], ymin = 0, ymax = 20.3, color = 'black') #quaternary
-    plt.hlines(25.375, xmin = beams['B6']['z_elements'][3]-10, xmax = beams['B6']['z_elements'][3]+10, color='black') #quat 4w
-    plt.vlines(beams['B6']['z_elements'][4], ymin = 0, ymax = 7.62, color = 'black') #quinary
-    plt.hlines(9.525, xmin = beams['B6']['z_elements'][4]-10, xmax = beams['B6']['z_elements'][4]+10, color='black') #quin 4w
-    
-    #mirror labels
-    plt.text(beams['B6']['z_elements'][2]-20, -10, 'M3', fontsize = 12, color = 'black')
-    plt.text(beams['B6']['z_elements'][3]-20, -10, 'M4', fontsize = 12, color = 'black')
-    plt.text(beams['B6']['z_elements'][4]-20, -10, 'M5', fontsize = 12, color = 'black')
-    plt.text(beams['B6']['z_w0'][-1]-20, -10, 'horn', fontsize = 12, color = 'black')
-    
-    #tidy plot
-    plt.xlim([11450, 13500])
-    plt.ylim([-32, 175])
-    plt.grid()
-    plt.xlabel('distance from primary [mm]')
-    plt.ylabel('beam radius [mm]')
-    plt.legend()
-    plt.tight_layout()
-
-    
-    
-def reverse_beam_propagation(single_freq_beam, edge_taper_dB = 30, Nz = 100, truncate = 0):
+    tilt coupling is better for smaller beam waists
     '''
     
+    theta = np.deg2rad(theta_degrees)
+    
+    eff = 100 * np.exp(-(3.1415**2)*(w0**2)*(theta**2)/(lambd**2))   #from Goldsmith 4.24a and 4.25 with matched waists
+    
+    return np.round(eff,3)
+    
+
+def offset_coupling_calculator(x0, w01, w02, lambd, z0=0):
+    '''
+    Assumes perfectly matched beams except for a lateral offset (see Goldsmith 
+    figure 4.1c... the offset here is x0 in that diagram).  Assumes beams meet 
+    at the beam waist.  All input parameters must be in the same units (usually mm).
     
     Parameters:
     -----------
-    single_freq_beam: dict containing the following keys:
-        focal_lengths: list of floats, focal lengths of each optical element [primary, secondary, ...] in mm
-        element_spacings: list of floats, distances between each optical element [primary to secondary, secondary to tertiary, ...]
-        lambda: float, wavelength in mm
-        R_h: float, slant length of horn in mm, equal to the radius of curvature at the horn aperture for conical corrugated horns
-        w_h: float, beam radius at the aperture of the horn in mm
-        Nz: int, how many points along the z-axis to calculate between each optical element
-            e.g. if there are 3 optical elements, then (2*Nz)+1 points will be calculated.  
-    edge_taper_dB: int or float, how many dB out to go for the edge tapered radius
-    Nz: int, how many points to calculate between elements
-    truncate: int or float, z-position (measured from horn) after which to truncate the 
-        calculations of w, R, etc. (makes things run faster for optimization stuff, when you don't
-        care about the secondary and primary).  If truncate <= 0, then no truncation is done.
+    x0: float, lateral offset of the beam (see Goldsmith fig 4.1c)
+    w01: float, waist radius of beam 1
+    w02: float, waist radius of beam 2
+    lambd: float, wavelength 
+    z0: float, axial offset of waists (see delta-z in Goldsmith fig 4.1a)
     
     
-    
-    
-    Returns:
-    --------
-    The original dict with the following keys added:
-        w0: list of floats, beam waist radii, typically in mm, starting from the horn waist
-        z_w0: list of floats, z-positions of each beam waist, typically in mm, starting 
-            from the horn waist
-        z_elements: list of floats, z-positions of each element, typically in mm, starting 
-            from the horn aperture
-        z_list: list of floats, every z-position we will calculate w, R, and phi for.  
-            0 is at the horn aperture. Typically in mm.  
-        w: list of floats, the beam radius at every z-position in z-list.  Typically in mm
-        R: list of floats, the wavefront radius of curvatureat every z-position in 
-            z-list.  Typically in mm.
-        phi: list of floats, the phase shift or "slippage" at every z-position in z-list
-
+    nb: 0.1 mm is about 4 mils
+        offset coupling is better for larger beam waists
     
     '''
     
-    focal_lengths = single_freq_beam['focal_lengths']
-    focal_lengths.reverse()
-    element_spacings = single_freq_beam['element_spacings']
-    element_spacings.reverse()
-    lambd = single_freq_beam['lambda']
-    R_h = single_freq_beam['R_h']
-    w_h = single_freq_beam['w_h']
+    delta_off = (((((w01**2) + (w02**2))**2) + ((lambd*z0/3.14159)**2)) / ((w01**2) + (w02**2)))**.5  #Goldsmith 4.30b
+    
+    eff = np.exp(-2*(x0**2)/(delta_off**2)) #goldsmith 4.30a
     
     
-    #calculate the location of each optical element along the z-axis (optical axis)
-    z_elements = [0] #horn aperture is at z=0  #called z_e in Zeng code
-    for distance in element_spacings:
-        new_z  = z_elements[-1] + distance # add the next distance onto the last z-position
-        z_elements.append(new_z)
-    
+    #eff = 100*(np.exp(-(offset**2)/(w0**2)))  #from Goldsmith 4.30a and 4.31 with waists equal and no z offset
 
-    #calculate the waist radius and z-location of the beam waists between each optical element
-    w0_horn, z_offset_horn = w0z0(lambd, R_h, w_h) #z_offset is the distance inside the horn (measured from the aperture) where the beam waist falls
-    w0 = [w0_horn]
-    z_w0 = [-z_offset_horn] #negative because the waist will be located inside the horn and we're calling the horn aperture z=0  #list of the z-position of each waist
-    focal_length_counter = 0
-    for element_z in z_elements:
-    
-        if element_z > 0: # don't do anything with the first one except store it
-            d_in = element_z - previous_z_w0 # where is the previous beam waist  #TODO# re-check this for minus signs.  might need to be + instead of -.  
-            w0_i, d_out = lens(previous_w0, d_in, focal_lengths[focal_length_counter], lambd)
-            w0.append(w0_i)
-            z_w0.append(d_out + element_z)
-            focal_length_counter += 1            
-        previous_z_w0 = z_w0[-1]
-        previous_w0 = w0[-1]
-
-
-    #generate points along z-axis
-    for element_z in z_elements:
-        if element_z == 0: #for the first one, deal with horn waist location at negative z
-            z_list = np.linspace(-z_offset_horn, 0, Nz+1).tolist()
-        else:
-            if element_z - previous_element_z <= 1000: # for small element spacings, use Nz
-                z_steps = np.linspace(previous_element_z, element_z, Nz+1).tolist()[1:] #chop off the first one because it's already in z
-            elif element_z - previous_element_z <= 2000: #for medium element spacings, use slightly denser points
-                z_steps = np.linspace(previous_element_z, element_z, (Nz*2)+1).tolist()[1:] #chop off the first one because it's already in z
-            else: #for big element spacings, use much denser points
-                z_steps = np.linspace(previous_element_z, element_z, (Nz*6)+1).tolist()[1:] #chop off the first one because it's already in z
-            z_list.extend(z_steps)
-        previous_element_z = element_z
-    if truncate > 0:
-        z_list = [x for x in z_list if x <= truncate]
-        
-    
-
-    
-    #for every point in z, calculate the beam radius (w), radius of curvature (R), phase slippage (phi), and edge taper radius (edge_taper_w)
-    w = []
-    R = []
-    phi = []
-    edge_taper_w = []
-    
-    edge_taper_factor = 0.3393*(edge_taper_dB**.5) #Goldsmith 2.35b
-    
-    element_number = 1
-    for z in z_list:  #step through each z-position in the system
-        if z > z_elements[element_number]: #move on to the next element
-            element_number += 1
-            #print('element number: {}.  z = {}'.format(element_number, z))
-        #print(z_w0[element_number], element_number)
-        w_tmp, R_tmp = wR(lambd, z-z_w0[element_number-1], w0[element_number-1])   
-        phi_tmp = phi_slippage(lambd, z-z_w0[element_number-1], w0[element_number-1])
-        w.append(w_tmp)
-        edge_taper_w.append(w_tmp*edge_taper_factor)
-        R.append(R_tmp)
-        phi.append(phi_tmp)
-    
-    
-    single_freq_beam['w0'] = w0
-    single_freq_beam['z_w0'] = z_w0
-    single_freq_beam['z_elements'] = z_elements
-    single_freq_beam['z_list'] = z_list
-    single_freq_beam['w'] = w
-    single_freq_beam['R'] = R
-    single_freq_beam['phi'] = phi
-    single_freq_beam['edge_taper_w'] = edge_taper_w
-    
-    return single_freq_beam
-        
-    
-def forward_beam_propagation(single_freq_beam, Nz = 100, primary_truncate_dB = 11, truncate = 0, calculate_m5 = True):
-
-    focal_lengths = single_freq_beam['focal_lengths']
-    element_spacings = single_freq_beam['element_spacings']
-    lambd = single_freq_beam['lambda']
-    R_h = single_freq_beam['R_h']
-    w_h = single_freq_beam['w_h']
-    dg = single_freq_beam['greg_foc']
-
-
-    z_elements = [0] #primary is at z=0
-    for distance in element_spacings:
-        new_z  = z_elements[-1] + distance # add the next distance onto the last z-position
-        z_elements.append(new_z)
-        
-    #calculate waist radius and z-location of beam waists between each optical element
-    z_w0 = [focal_lengths[0], z_elements[1] + dg] #first two waists are at prime and gregorian foci
-    w_primary = 5000/(0.3393 * (primary_truncate_dB**.5))  #goldsmith 2.35b, beamwidth at primary
-    w0_primary = min(w0_calc(lambd, w_primary, focal_lengths[0])) #primary beam waist radius
-    w0_secondary = lens(w0_primary, z_elements[1]-focal_lengths[0], focal_lengths[1], lambd)[0]
-    w0 = [w0_primary, w0_secondary]
-    focal_length_counter = 2
-    for element_z in z_elements:
-        if element_z > z_elements[1] and element_z < z_elements[-1]: # don't do anything with the first two or the last one except store it
-            d_in = element_z - previous_z_w0 #location of previous beam waist
-            w0_out, d_out = lens(previous_w0, d_in, focal_lengths[focal_length_counter], lambd)
-            w0.append(w0_out)
-            z_w0.append(d_out + element_z)
-            focal_length_counter += 1
-        previous_z_w0 = z_w0[-1]
-        previous_w0 = w0[-1]
-    
-    print('w0: {}'.format(np.round(w0, 2)))
-    print('z_w0: {}'.format(np.round(z_w0, 2)))
-     
-    #generate points along z-axis
-    z_list = [0] #primary position
-    previous_element_z = 0
-    for element_z in z_elements[1:-1]: #from after the primary up to the last mirror before the horn
-        if element_z - previous_element_z <= 500: # for small element spacings, use Nz
-            n_points = Nz+1
-        elif element_z - previous_element_z <= 2000: #for medium element spacings, use slightly denser points
-            n_points = (Nz*2)+1
-        else: #for big element spacings, use more points
-            n_points = (Nz*6)+1
-        z_steps = np.linspace(previous_element_z, element_z, n_points).tolist()[1:] #chop off the first one because it's already in z
-        z_list.extend(z_steps)
-        previous_element_z = element_z
-    
-    #add points between horn aperture and horn waist
-    z_steps = np.linspace(z_list[-1], z_w0[-1], 200)[1:]
-    z_list.extend(z_steps)
-
-    
-    if truncate > 0:
-        z_list = [x for x in z_list if x <= truncate]
-    
-    # for every point in z, calculate the beam radius (w), radius of wavefront curvature (R), phase slippage (phi), and edge taper radius (edge_taper_w)
-    
-    w = []
-    R = []
-    phi = []
-    
-    #edge_taper_w = []
-    #edge_taper_factor = 0.3393*(edge_taper_dB**.5) #Goldsmith 2.35b
-    
-    element_number = 1
-    for z in z_list: #step through each z-position in the system
-        if z > z_elements[element_number] and element_number < len(z_elements)-1: #move on to the next element
-            element_number += 1
-        w_tmp, R_tmp = wR(lambd, z-z_w0[element_number-1], w0[element_number-1])
-        #phi_tmp = phi_slippage(lambd, z-z_w0[element_number-1], w0[element_number-1])
-        w.append(w_tmp)
-        R.append(R_tmp)
-        #phi.append(phi_tmp)
-        #edge_taper_w.append(w_tmp*edge_taper_factor)
-        
-    single_freq_beam['w0'] = w0
-    single_freq_beam['z_w0'] = z_w0
-    single_freq_beam['z_elements'] = z_elements
-    single_freq_beam['z_list'] = z_list
-    single_freq_beam['w'] = w
-    single_freq_beam['R'] = R
-    #single_freq_beam['phi'] = phi
-    #single_freq_beam['edge_taper_w'] = edge_taper_w
-    
-    if calculate_m5:
-        
-        #calculate horn parameters
-        w0_in, z_offset_horn = w0z0(lambd, R_h, w_h) #z_offset is the distance inside the horn (measured from the aperture) where the beam waist falls
-        w0_out = w0[3]# waist between M4 and M5
-        print('Horn waist for {} mm: {} mm'.format(np.round(lambd,2), np.round(w0_in,2)))
-        d_in = z_offset_horn + element_spacings[-1] #distance from horn waist to last mirror
-        d_out = z_elements[-2]-z_w0[-2]
-        f_M5 = reverse_lens(wo_in, d_in, d_out, w0_out, lambd)  #returns a tuple, both roots
-        
-        print('Suggested M5 focal lengths for {} mm:  {}'.format(np.round(lambd,2), np.round(f_M5,4)))
-        
-    return single_freq_beam     
-
-
-def main_reverse(plot = True):
-    '''
-    from horn moving towards primary
-    
-    '''
-    
-    beams = generate_parameter_dict()
-    
-    beams['B6'] = reverse_beam_propagation(beams['B6'], edge_taper_dB = 30, Nz = 10000)
-    beams['B7'] = reverse_beam_propagation(beams['B7'], edge_taper_dB = 30, Nz = 10000)
-    
-    M34_waist_diff = (beams['B6']['z_w0'][2] - beams['B6']['z_elements'][-2])-(beams['B7']['z_w0'][2] - beams['B7']['z_elements'][-2])
-    M23_waist_diff = (beams['B6']['z_w0'][3] - beams['B6']['z_elements'][-2])-(beams['B7']['z_w0'][3] - beams['B7']['z_elements'][-2])
-    
-    
-    #beam waist offsets between bands
-    print('Waist 3-4: {}'.format(np.round(M34_waist_diff, 2)))
-    print('Waist 2-3: {}'.format(np.round(M23_waist_diff, 2)))
-    
-    #beam widths at fixed mirrors
-    secondary_index_b6 = beams['B6']['z_list'].index(beams['B6']['z_elements'][4])
-    secondary_index_b7 = beams['B7']['z_list'].index(beams['B7']['z_elements'][4])
-    w_secondary_b6 = beams['B6']['w'][secondary_index_b6]
-    w_secondary_b7 = beams['B7']['w'][secondary_index_b7]
-    print('beam radius at secondary: {}, {}'.format( np.round(w_secondary_b6, 2) , np.round(w_secondary_b7, 2) ))
-    print('beam radius at primary: {}, {}'.format( np.round(beams['B6']['w'][-1], 2) , np.round(beams['B7']['w'][-1],2)  ))
-    
-    if plot:
-        thin_lens_plot_reverse(beams)
-    
-    return beams    
-    
-
-
-def constraint(vars, X, z_c, w_oi, w_oo):
-    '''
-    
-    '''
-    d_i, d_o, f = vars
-    
-    eq_spacing = d_i + d_o - X
-    
-    denominator = ((d_i/f)**2) + ((z_c/f)**2)
-    
-    eq_d_out = 1 + (((d_i/f)-1) / denominator) - (d_o/f)
-    
-    eq_w0_out = (w_oi / (denominator**.5)) - w_oo
-    
-    return [eq_spacing, eq_d_out, eq_w0_out]
-
-
-def solve_constraint(X, z_c, w_oi, w_oo, initial_guess = (100, 1000, 100)):
-    '''
-    
-    
-    '''
-    d_i, d_o, f = opt.fsolve(constraint, x0 = initial_guess, args = (X, z_c, w_oi, w_oo)) 
-    
-    return d_i, d_o, f
+    return np.round(eff*100, 3)
 
 
 
-    
-    
-    
-    
 
-    
-    
