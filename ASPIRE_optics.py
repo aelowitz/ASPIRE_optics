@@ -3,10 +3,10 @@
 '''
 This optics code was written by Amy Lowitz (lowitz@arizona.edu).  
 The key underlying Gaussian optics equations are derived in many textbooks and 
-papers and are standard to the field.  In most cases, however, I point to specific 
-equation numbers from Paul Goldsmith's textbook, Quasioptical Systems, in inline comments, 
-as a guidepost to any user needing an entry-point for learning more about the relevant
-physical underpinnings.  
+papers and are standard to the field.  In most cases, I point to specific 
+equation numbers from Paul Goldsmith's venerable textbook, Quasioptical Systems, in inline comments.
+I hope for these comments to act as guideposts to any user trying to understand the code 
+or needing an entry-point for learning more about the relevant physical underpinnings.  
 
 
 Author: Amy Lowitz - Spring 2025
@@ -15,6 +15,7 @@ Updates:
     Late June 2025 (AEL):   - Complete refactor to make agnostic to number of mirrors.
                             - Significantly reduces code redudndancies between forward and reverse functionality
                             - Got rid of old hyper-specific "optimizing" and constraint solving functions
+    Spring 2026 (AEL)   :   - More cleanup and better block comments
 
 
 
@@ -56,7 +57,9 @@ def generate_parameter_dict():
         Takes the hard-coded parameters at the top of this function and puts them into a dictionary 
         to be referenced by the beam propagation code. 
         
-        Edit between the "EDIT BELOW HERE" comment and the "EDIT ABOVE HERE" comment.
+        For ASPIRE, edit between the "EDIT BELOW HERE" comment and the "EDIT ABOVE HERE" comment.
+        To adapt for non-ASPIRE projects, you'll need to edit almost everything in this function
+        (or produce the parameters dictionary yourself some other way).  
     
     '''
     
@@ -155,6 +158,9 @@ def main(directions = ['forward'], plot = True, do_adjust = False):
     '''
     
     Wrapper function to do the beam propagation and plotting. 
+    Note that generate_parameter_dict(), called in the first line of this fucntion, 
+    assumes a specific number of mirrors and a lot of other ASPIRE-specific parameters, 
+    but everything else called after that is agnostic to number of mirrors, etc.  
     
     
     Parameters:
